@@ -23,16 +23,21 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.LinkedList;
 
+import java.net.URI;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.commons.lang.StringUtils;
 
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.Table;
+import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.hive.common.LogUtils;
 import org.apache.hadoop.hive.common.LogUtils.LogInitializationException;
+import static org.apache.hadoop.hive.serde.serdeConstants.FIELD_DELIM;
 
 public class MetaStoreExportTool {
      private static final Log LOG =
@@ -57,34 +62,7 @@ public class MetaStoreExportTool {
           System.err.println(logInitDetailMessage);
 
           HiveConf hiveConf = new HiveConf(MetaStoreExportTool.class);
-          HiveMetaStoreClient client = new HiveMetaStoreClient(hiveConf);
-          StringBuilder s = new StringBuilder();
-          for (String db : client.getAllDatabases()) {
-               s.append("CREATE SCHEMA ");
-               s.append(db);
-               s.append(";\n");
-               for (String tbl : client.getAllTables(db)) {
-                    s.append("CREATE TABLE ");
-                    s.append(tbl);
-                    s.append(" ( ");
-                    List<String> fields = new LinkedList<String>();
-                    for (FieldSchema f : client.getFields(db, tbl)) {
-                         StringBuilder fs = new StringBuilder();
-                         String type = _typesMap.get(f.getType());
-                         fs.append(f.getName());
-                         fs.append(" ");
-                         if (type != null) {
-                              fs.append(type);
-                         } else {
-                              fs.append(f.getType());
-                         }
-                         fields.add(fs.toString());
-                    }
-                    s.append(StringUtils.join(fields, ", "));
-                    s.append(" );\n");
-               }
-          }
-
-          System.out.println(s);
+					VerticaExporter exporter = new VerticaExporter(hiveConf);
+          System.out.println(exporter.emitAll());
      }
 }
