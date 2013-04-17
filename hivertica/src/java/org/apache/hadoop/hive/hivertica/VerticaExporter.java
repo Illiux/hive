@@ -43,9 +43,6 @@ public class VerticaExporter {
 	private static final Log LOG =
 		LogFactory.getLog(VerticaExporter.class);
 
-	// TODO: Move into xml configuration
-	private static final String WEBHDFS_URI = "http://localhost:50070/webhdfs/v1";
-
 	// TODO: Add other types that need converting between Hive and Vertica
 	private static final Map<String, String> _typesMap =
 		new HashMap<String, String>() {{
@@ -82,7 +79,8 @@ public class VerticaExporter {
 		} catch (URISyntaxException e) {
 			throw new ExporterException("Error reading storage location", e);
 		}
-		String location = WEBHDFS_URI + loc.getPath();
+		String hdfsuri = hiveConf.getVar(HiveConf.ConfVars.HADOOP_WEBHDFS_ADDRESS);
+		String location = hdfsuri + loc.getPath();
 		String delim = sd.getSerdeInfo().getParameters().get(FIELD_DELIM);
 
 		s.append("CREATE EXTERNAL TABLE IF NOT EXISTS ");
