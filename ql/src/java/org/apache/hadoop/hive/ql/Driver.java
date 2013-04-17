@@ -107,6 +107,14 @@ import org.apache.hadoop.mapred.JobClient;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.util.ReflectionUtils;
 
+// HiVertica
+import java.sql.DriverManager;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.ResultSet;
+import org.apache.hadoop.hive.hivertica.VerticaExporter;
+
 public class Driver implements CommandProcessor {
 
   static final private Log LOG = LogFactory.getLog(Driver.class.getName());
@@ -128,6 +136,11 @@ public class Driver implements CommandProcessor {
   // A limit on the number of threads that can be launched
   private int maxthreads;
   private static final int SLEEP_TIME = 2000;
+
+	// TODO: Do more cleanly
+	private boolean useVertica = false;
+	private ArrayList<String> verticaResults;
+	
   protected int tryCount = Integer.MAX_VALUE;
 
   private boolean checkLockManager() {
@@ -417,6 +430,58 @@ public class Driver implements CommandProcessor {
       tree = ParseUtils.findRootNonNullToken(tree);
 
       BaseSemanticAnalyzer sem = SemanticAnalyzerFactory.get(conf, tree);
+
+			// hivertica code
+			useVertica = false;
+			String url = conf.getVar(HiveConf.ConfVars.VERTICA_URL);
+			if (sem instanceof SemanticAnalyzer && url != null) {
+				useVertica = true;
+				try {
+					Class.forName("com.vertica.jdbc.Driver").newInstance();
+					String user = conf.getVar(HiveConf.ConfVars.VERTICA_USER);
+					String pw = conf.getVar(HiveConf.ConfVars.VERTICA_PASSWORD);
+					Connection conn = DriverManager.getConnection(url, user, pw);
+					// For now, create everything.
+					VerticaExporter v = new VerticaExporter(conf);
+					v.emitSchemas = false;
+					Statement statement = conn.createStatement();
+					for (String query : v.emitAll()) {
+						statement.execute(query);
+					}
+					ResultSet rs = statement.executeQuery(command);
+					verticaResults = new ArrayList<String>();
+					while (rs.next()) {
+						StringBuilder s = new StringBuilder();
+						for (int i = 1; i <= rs.getMetaData().getColumnCount(); i++) {
+							s.append(rs.getString(i));
+							s.append(" ");
+						}
+						verticaResults.add(s.toString());
+					}
+					conn.close();
+				}
+				catch (ClassNotFoundException ex) {
+					errorMessage = ex.getMessage();
+					console.printError(ex.getMessage());
+					return -1;
+				}
+				catch (IllegalAccessException ex) {
+					errorMessage = ex.getMessage();
+					console.printError(ex.getMessage());
+					return -1;
+				}
+				catch (InstantiationException ex) {
+					errorMessage = ex.getMessage();
+					console.printError(ex.getMessage());
+					return -1;
+				}
+				catch (SQLException ex) {
+					errorMessage = ex.getMessage();
+					console.printError(ex.getMessage());
+					return -1;
+				}
+			}
+
       List<AbstractSemanticAnalyzerHook> saHooks =
           getHooks(HiveConf.ConfVars.SEMANTIC_ANALYZER_HOOK,
                    AbstractSemanticAnalyzerHook.class);
@@ -900,6 +965,9 @@ public class Driver implements CommandProcessor {
       releaseLocks(ctx.getHiveLocks());
       return new CommandProcessorResponse(ret, errorMessage, SQLState);
     }
+
+		// TODO: do this more cleanly
+		if (useVertica) { return new CommandProcessorResponse(0); }
 
     boolean requireLock = false;
     boolean ckLock = checkLockManager();
@@ -1388,6 +1456,15 @@ public class Driver implements CommandProcessor {
   }
 
   public boolean getResults(ArrayList<String> res) throws IOException, CommandNeedRetryException {
+		if (useVertica) {
+			if (verticaResults != null) {
+				res.addAll(verticaResults);
+				verticaResults = null;
+				return true;
+			} else {
+				return false;
+			}
+		}
     if (plan != null && plan.getFetchTask() != null) {
       FetchTask ft = plan.getFetchTask();
       ft.setMaxRows(maxRows);

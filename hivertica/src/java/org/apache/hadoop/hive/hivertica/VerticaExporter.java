@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.List;
 import java.util.LinkedList;
+import java.util.ArrayList;
 import java.net.URI;
 import java.net.URISyntaxException;
 
@@ -52,6 +53,7 @@ public class VerticaExporter {
 		}};
 
 	public boolean useTempTables = false;
+	public boolean emitSchemas = true;
 	private HiveConf hiveConf;
 
 	public VerticaExporter(HiveConf hiveConf) {
@@ -83,9 +85,11 @@ public class VerticaExporter {
 		String location = WEBHDFS_URI + loc.getPath();
 		String delim = sd.getSerdeInfo().getParameters().get(FIELD_DELIM);
 
-		s.append("CREATE EXTERNAL TABLE ");
-		s.append(db);
-		s.append(".");
+		s.append("CREATE EXTERNAL TABLE IF NOT EXISTS ");
+		if (emitSchemas) {
+				s.append(db);
+				s.append(".");
+		}
 		s.append(tbl);
 		s.append(" (");
 
@@ -109,49 +113,64 @@ public class VerticaExporter {
 		s.append(StringUtils.join(fields, ", "));
 		s.append(") AS COPY WITH SOURCE Hdfs(url='");
 		s.append(location);
-		s.append("') DELIMITER '");
+		s.append("/*') DELIMITER '");
 		s.append(delim);
-		s.append("';\n");
+		s.append("'");
 
 		return s.toString();
 	}
 
-	public String emitDB(String db) throws ExporterException {
+	public ArrayList<String> emitDB(String db) throws ExporterException {
 		HiveMetaStoreClient metastore;
+		ArrayList<String> res = new ArrayList<String>();
 		try {
 			metastore = new HiveMetaStoreClient(hiveConf);
 		} catch (MetaException e) {
 			throw new ExporterException("Error reading metastore", e);
 		}
 		StringBuilder s = new StringBuilder();
-		s.append("CREATE SCHEMA ");
-		s.append(db);
-		s.append(";\n");
+		if (emitSchemas) {
+				if (!db.equals("default")) {
+						s.append("CREATE SCHEMA IF NOT EXISTS ");
+						s.append(db);
+						res.add(s.toString());
+				}
+		}
+
 		try {
 			for (String tbl : metastore.getAllTables(db)) {
-				s.append(emitTable(db, tbl));
+				res.add(emitTable(db, tbl));
 			}
 		} catch (MetaException e) {
 			throw new ExporterException("Error reading metastore", e);
 		}
-		return s.toString();
+		return res;
 	}
 
-	public String emitAll() throws ExporterException {
+	public String emitDBString(String db) throws ExporterException {
+		return StringUtils.join(emitDB(db), ";\n");
+	}
+		
+
+	public ArrayList<String> emitAll() throws ExporterException {
+		ArrayList<String> res = new ArrayList<String>();
 		HiveMetaStoreClient metastore;
 		try {
 			metastore = new HiveMetaStoreClient(hiveConf);
 		} catch (MetaException e) {
 			throw new ExporterException("Error reading metastore", e);
 		}
-		StringBuilder s = new StringBuilder();
 		try {
 			for (String db : metastore.getAllDatabases()) {
-				s.append(emitDB(db));
+				res.addAll(emitDB(db));
 			}
 		} catch (MetaException e) {
 			throw new ExporterException("Error reading metastore", e);
 		}
-		return s.toString();
+		return res;
+	}
+
+	public String emitAllString() throws ExporterException {
+		return StringUtils.join(emitAll(), ";\n");
 	}
 }

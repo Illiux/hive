@@ -63,6 +63,6 @@ public class MetaStoreExportTool {
 
           HiveConf hiveConf = new HiveConf(MetaStoreExportTool.class);
 					VerticaExporter exporter = new VerticaExporter(hiveConf);
-          System.out.println(exporter.emitAll());
+          System.out.println(exporter.emitAllString());
      }
 }

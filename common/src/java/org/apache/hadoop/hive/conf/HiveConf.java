@@ -724,6 +724,12 @@ public class HiveConf extends Configuration {
 
     // Whether to show the unquoted partition names in query results.
     HIVE_DECODE_PARTITION_NAME("hive.decode.partition.name", false),
+
+		// HiVertica related options
+		HADOOP_WEBHDFS_ADDRESS("dfs.http.address", null),
+		VERTICA_URL("vertica.url", null),
+		VERTICA_USER("vertica.user", null),
+		VERTICA_PASSWORD("vertica.password", null),
     ;
 
     public final String varname;
